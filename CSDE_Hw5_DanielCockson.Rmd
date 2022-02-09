@@ -127,6 +127,7 @@ read_hfd_countries_item <- function(countries, item){
 ```
 
 ```{r}
+#pull the countries and feed them into the function
 CNTRIES <- hfdcodes %>% 
     filter(Name %in% c("Germany", "Scotland", "United Kingdom")) %>% 
     pull(ccode)
@@ -134,7 +135,13 @@ CNTRIES <- hfdcodes %>%
 totbirthsRR_GRM_SCT_UK <- read_hfd_countries_item(countries = CNTRIES, item = "totbirthsRR")
 ```
 
+#Q4
+**Live births per country**
+
+We can see from the graphs below that live births over time have been steadily decreasing for Germany and Scotland but have been fluctuating for the United Kingdom.
+
 ```{r}
+#create a graph of live births per 1000000 per country
 totbirthsRR_GRM_SCT_UK %>% 
     mutate(TotalM = Total / 1000000) %>% 
     ggplot( 
