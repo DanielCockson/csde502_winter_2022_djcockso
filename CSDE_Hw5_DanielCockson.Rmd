@@ -1,0 +1,157 @@
+---
+title: "Assignment 5, , CSDE 502 Winter 2022"
+author: "[Daniel Cockson](djcockso@uw.edu)"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    toc_depth: 6
+    number_sections: true
+    code_folding: hide
+    self_contained: yes
+---
+
+<!-- wider output -->
+<style type="text/css">
+.main-container {
+  max-width: 100% !important;
+  margin: auto;
+}
+</style>
+
+```{r setup, echo=FALSE, message=FALSE}
+# load several packages
+pacman::p_load(kableExtra, ISOcodes, HMDHFDplus, magrittr, captioner, keyring, HMDHFDplus, tidycensus, ggplot2, mapview, tidyverse)
+
+table_nums <- captioner(prefix = "Table")
+figure_nums <- captioner(prefix = "Figure")
+```
+
+```{r}
+# get the keys
+myKeys <- key_list()
+
+# Set your password for Human Fertility Database (HFD)
+if (key_list(service = "human-fertility-database") %>% nrow() == 0) {
+    keyring::key_set(
+        service = "human-fertility-database",
+        username = "oschul@uw.edu"
+    )
+    # Enter your HFD password in the prompt
+}
+
+keyring::key_delete(service = "human-fertility-database", username = "djcockso@uw.edu")
+
+```
+
+```{r}
+# HFD country codes
+hfdcodes <- getHFDcountries() %>% tibble(ccode = .)
+
+# ISO country codes
+isocodes <- ISO_3166_1 %>% tibble() %>% select(ccode = Alpha_3, Name)
+
+# join ISO codes with country names
+hfdcodes %<>% left_join(isocodes, by = "ccode")
+
+# there are some countries in the HFD that do not use standard 3 character ISO codes
+hfdcodes %>% filter(is.na(Name))
+```
+
+```{r}
+# update those
+hfdcodes %<>% 
+    mutate(Name = 
+        case_when(ccode == "FRATNP" ~  "France",
+                  ccode == "DEUTNP" ~  "Germany",
+                  ccode == "DEUTE" ~   "East Germany",
+                  ccode == "DEUTW" ~   "West Germany",
+                  ccode == "GBR_NP" ~  "United Kingdom", 
+                  ccode == "GBRTENW" ~ "England and Wales",
+                  ccode == "GBR_SCO" ~ "Scotland",
+                  ccode == "GBR_NIR" ~ "Northern Ireland",
+                  TRUE ~ Name)
+    )
+```
+
+```{r}
+hfdcodes %>% 
+    kable() %>% 
+    kable_styling(bootstrap_options =
+                      c("striped", "hover", "condensed", "responsive"), 
+                  font_size = 12,
+                  full_width = F, position = "left")
+```
+
+```{r}
+# a function to read HFD for one country and one item
+read_hfd_country <- function(CNTRY, item) {
+  HMDHFDplus::readHFDweb(
+    # the country from the function call
+    CNTRY = CNTRY,
+    # the item to download
+    item = item,
+    # the username from this key's record
+    username = keyring::key_list("human-fertility-database")$username,
+    # the password for this key's record
+    password = keyring::key_get(
+      service = "human-fertility-database",
+      username = keyring::key_list("human-fertility-database")$username
+    )
+  )
+}
+
+```
+
+```{r}
+# Download a data set iteratively for all named countries using purrr::map()
+read_hfd_countries_item <- function(countries, item){
+    countries %>%
+        # Returns a list of data.frames, adding a column for country code to each
+        # the map() function performs a run of Ben's read_hmd_country() 
+        #   function for each listed country
+        purrr::map_dfr(function(ccode) {
+            # the item to read is 1 x 1 death rates
+            read_hfd_country(ccode, item) %>%
+                # this adds the column "country" storing the country ISO code
+                dplyr::mutate(ccode = ccode)
+        }) %>%
+        # Phil added this to make it a tibble
+        tibble() %>% 
+        # and add country name
+        left_join(hfdcodes, by = "ccode")
+}
+```
+
+```{r}
+CNTRIES <- hfdcodes %>% 
+    filter(Name %in% c("Germany", "Scotland", "United Kingdom")) %>% 
+    pull(ccode)
+
+totbirthsRR_GRM_SCT_UK <- read_hfd_countries_item(countries = CNTRIES, item = "totbirthsRR")
+```
+
+```{r}
+totbirthsRR_GRM_SCT_UK %>% 
+    mutate(TotalM = Total / 1000000) %>% 
+    ggplot( 
+       mapping = aes(x = Year, y = TotalM)) +
+    geom_line() +
+    facet_wrap(~Name, ncol = 1, scales = "free_y") +
+    ylab("live births") +
+    xlab("year")
+```
+
+
+
+<hr>
+
+# Source code for this document
+```{r, comment='', echo=FALSE}
+cat(readLines("csde502_2022_assignment04_DanielCockson.Rmd"), sep = "\n")
+```
+
+
